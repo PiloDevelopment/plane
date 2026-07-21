@@ -119,6 +119,12 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
     if (templateId === selectedTemplateId) return;
 
     const selectedTemplate = getLocalIntakeTemplate(projectId, selectedTemplateId);
+    const nextTemplate = getLocalIntakeTemplate(projectId, templateId);
+    if (selectedTemplate && nextTemplate && selectedTemplate.descriptionHtml === nextTemplate.descriptionHtml) {
+      setSelectedTemplateId(nextTemplate.id);
+      return;
+    }
+
     if (isLocalIntakeTemplateDescriptionPristine(formData.description_html, selectedTemplate)) {
       applyTemplateSelection(templateId);
       return;
@@ -264,6 +270,7 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
             </div>
             <div className="space-y-3">
               <LocalIntakeTemplateSelector
+                descriptionHtml={formData.description_html}
                 projectId={projectId}
                 selectedTemplateId={selectedTemplateId}
                 onSelect={handleTemplateSelection}
