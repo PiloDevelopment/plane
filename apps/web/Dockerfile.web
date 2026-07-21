@@ -1,10 +1,14 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-alpine AS base
+# Modified by Pilo Development on 2026-07-20 for the governed Pilo Community image.
+FROM node:22.23.1-alpine3.24@sha256:16e22a550f3863206a3f701448c45f7912c6896a62de43add43bb9c86130c3e2 AS base
 
 # Setup pnpm package manager with corepack and configure global bin directory for caching
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
-RUN corepack enable
+ARG PNPM_VERSION=10.30.2
+RUN corepack enable \
+  && corepack install --global pnpm@${PNPM_VERSION} \
+  && pnpm --version
 
 # *****************************************************************************
 # STAGE 1: Build the project
@@ -15,7 +19,9 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 ARG TURBO_VERSION=2.8.12
-RUN corepack enable pnpm && pnpm add -g turbo@${TURBO_VERSION}
+RUN pnpm config set global-bin-dir "${PNPM_HOME}" \
+  && pnpm add --global turbo@${TURBO_VERSION} \
+  && turbo --version
 COPY . .
 
 RUN turbo prune --scope=web --docker
@@ -33,7 +39,6 @@ WORKDIR /app
 COPY .gitignore .gitignore
 COPY --from=builder /app/out/json/ .
 COPY --from=builder /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
-RUN corepack enable pnpm
 
 # Copy full directory structure before fetch to ensure all package.json files are available
 COPY --from=builder /app/out/full/ .
@@ -75,7 +80,16 @@ RUN pnpm turbo run build --filter=web
 # *****************************************************************************
 # STAGE 3: Serve with nginx
 # *****************************************************************************
-FROM nginx:1.27-alpine AS production
+FROM nginx:1.30.4-alpine@sha256:97d490c12ba55b4946b01546d1c3ed324e8d41ab1c9fcb2a616aa470620e5b46 AS production
+
+ARG PILO_SOURCE_REVISION="unknown"
+
+LABEL org.opencontainers.image.title="Pilo Plane Community frontend" \
+  org.opencontainers.image.description="Plane Community v1.2.3 with Pilo's project-scoped Intake template extension" \
+  org.opencontainers.image.source="https://github.com/PiloDevelopment/plane" \
+  org.opencontainers.image.revision="${PILO_SOURCE_REVISION}" \
+  org.opencontainers.image.version="v1.2.3-pilo.1" \
+  org.opencontainers.image.licenses="AGPL-3.0-only"
 
 COPY apps/web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=installer /app/apps/web/build/client /usr/share/nginx/html
@@ -83,6 +97,6 @@ COPY --from=installer /app/apps/web/build/client /usr/share/nginx/html
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:3000/ >/dev/null || exit 1
+  CMD /bin/busybox wget -q -O /dev/null http://127.0.0.1:3000/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
