@@ -7,7 +7,8 @@
 - Upstream commit: `c3a9f997899fbd18b91d25b45ec45c93c689ba55`
 - Pilo branch: `pilo-v1.2.3`
 - First Pilo release: `v1.2.3-pilo.1`
-- Frontend image: `ghcr.io/pilodevelopment/plane-frontend:v1.2.3-pilo.1`
+- Current Pilo release: `v1.2.3-pilo.2`
+- Frontend image: `ghcr.io/pilodevelopment/plane-frontend:v1.2.3-pilo.2`
 - License: `AGPL-3.0-only`
 
 The public repository and source links on the sign-in surface, authenticated
@@ -27,9 +28,15 @@ selector as a no-op. This fork adds an independent, frontend-only Intake
 template registry for Pilo-owned projects.
 
 The first registry entry is `Codex Request - Agent Ready`, scoped to project
-`e9b270a8-719f-4e2f-80bb-e9724f906e16`. It pre-populates the ten Markdown
-sections enforced by Pilo's Plane-to-Codex bridge and the human Definition of
-Ready checklist.
+`e9b270a8-719f-4e2f-80bb-e9724f906e16`. The registry also includes
+purpose-fit blueprints for bug/regression work, UI/UX changes, production
+incidents, integration-provider changes, migrations/backfills, backend/API
+changes, and investigations.
+
+Every blueprint pre-populates the same ten Markdown sections enforced by Pilo's
+Plane-to-Codex bridge and the human Definition of Ready checklist. The richer
+examples, validation hints, and request-writing guidance are displayed in the
+Intake UI only; they are not inserted into the submitted description.
 
 Trust boundaries:
 
@@ -40,8 +47,12 @@ Trust boundaries:
   existing form.
 - Every required section starts with exactly `TBD`, so Pilo's readiness guard
   rejects an unedited template instead of dispatching incomplete work.
+- The local Intake UI mirrors the readiness check as a helper count, but the
+  bridge and GitHub workflow remain authoritative.
 - Changing templates after editing requires explicit confirmation and preserves
   the title and all work-item properties.
+- Switching between blueprints that share the same submitted description changes
+  guidance only and does not erase an edited draft.
 - Projects without a matching registry entry receive the unmodified Community
   Intake experience.
 
@@ -87,6 +98,7 @@ Acceptance:
 - `/api/instances/` still reports Plane Community `1.2.3`.
 - Existing authenticated pages and Intake records remain accessible.
 - The Pilo project Intake modal defaults to `Codex Request - Agent Ready`.
+- The template selector exposes purpose-fit blueprints and helper-only examples.
 - An unknown project does not render the Pilo template selector.
 - Selecting `Blank request` clears only an unedited description.
 - Editing the description and changing templates opens a confirmation dialog.
