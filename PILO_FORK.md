@@ -7,8 +7,8 @@
 - Upstream commit: `c3a9f997899fbd18b91d25b45ec45c93c689ba55`
 - Pilo branch: `pilo-v1.2.3`
 - First Pilo release: `v1.2.3-pilo.1`
-- Current Pilo release: `v1.2.3-pilo.2`
-- Frontend image: `ghcr.io/pilodevelopment/plane-frontend:v1.2.3-pilo.2`
+- Current Pilo release: `v1.2.3-pilo.3`
+- Frontend image: `ghcr.io/pilodevelopment/plane-frontend:v1.2.3-pilo.3`
 - License: `AGPL-3.0-only`
 
 The public repository and source links on the sign-in surface, authenticated
@@ -34,9 +34,9 @@ incidents, integration-provider changes, migrations/backfills, backend/API
 changes, and investigations.
 
 Every blueprint pre-populates the same ten Markdown sections enforced by Pilo's
-Plane-to-Codex bridge and the human Definition of Ready checklist. The richer
-examples, validation hints, and request-writing guidance are displayed in the
-Intake UI only; they are not inserted into the submitted description.
+Plane-to-Codex bridge and the human Definition of Ready checklist. Each
+blueprint now inserts type-specific examples directly into the editor body so
+submitters see a complete request shape while they write.
 
 Trust boundaries:
 
@@ -45,14 +45,16 @@ Trust boundaries:
   remain authoritative.
 - The template cannot write a work item until the operator submits Plane's
   existing form.
-- Every required section starts with exactly `TBD`, so Pilo's readiness guard
-  rejects an unedited template instead of dispatching incomplete work.
+- Every required section starts with visible `Example:` guidance, not `TBD`.
+  Pilo's readiness guard ignores those example lines and rejects an unedited
+  template instead of dispatching incomplete work.
 - The local Intake UI mirrors the readiness check as a helper count, but the
   bridge and GitHub workflow remain authoritative.
 - Changing templates after editing requires explicit confirmation and preserves
   the title and all work-item properties.
-- Switching between blueprints that share the same submitted description changes
-  guidance only and does not erase an edited draft.
+- Switching between blueprints changes the inserted examples for an unedited
+  draft. After operator edits, changing templates requires explicit
+  confirmation and does not erase the title or work-item properties.
 - Projects without a matching registry entry receive the unmodified Community
   Intake experience.
 
@@ -70,7 +72,7 @@ Build the same frontend image used in production:
 docker build \
   --file apps/web/Dockerfile.web \
   --build-arg PILO_SOURCE_REVISION="$(git rev-parse HEAD)" \
-  --tag pilo-plane-frontend:v1.2.3-pilo.1 \
+  --tag pilo-plane-frontend:v1.2.3-pilo.3 \
   .
 ```
 
@@ -98,7 +100,8 @@ Acceptance:
 - `/api/instances/` still reports Plane Community `1.2.3`.
 - Existing authenticated pages and Intake records remain accessible.
 - The Pilo project Intake modal defaults to `Codex Request - Agent Ready`.
-- The template selector exposes purpose-fit blueprints and helper-only examples.
+- The template selector exposes purpose-fit blueprints and the editor body
+  inserts type-specific example guidance instead of blank `TBD` placeholders.
 - An unknown project does not render the Pilo template selector.
 - Selecting `Blank request` clears only an unedited description.
 - Editing the description and changing templates opens a confirmation dialog.

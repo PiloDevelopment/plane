@@ -26,7 +26,7 @@ test("scopes the Codex request template to the Pilo project", () => {
   assert.equal(getDefaultLocalIntakeTemplate("another-project"), null);
 });
 
-test("offers purpose-fit blueprints without changing the fail-closed submitted body", () => {
+test("offers purpose-fit blueprints with tailored fail-closed examples", () => {
   const templates = getLocalIntakeTemplates(PILO_PROJECT_ID);
   const template = getDefaultLocalIntakeTemplate(PILO_PROJECT_ID);
   assert.ok(template);
@@ -37,25 +37,30 @@ test("offers purpose-fit blueprints without changing the fail-closed submitted b
   assert.ok(templates.some((item) => item.name === "Production Incident"));
   assert.ok(templates.some((item) => item.name === "Migration / Backfill"));
 
+  const descriptionBodies = new Set(templates.map((item) => item.descriptionHtml));
+  assert.ok(descriptionBodies.size >= 6, "blueprints should provide type-specific inserted examples");
+
   for (const item of templates) {
-    assert.equal(item.descriptionHtml, template.descriptionHtml);
     assert.ok(item.bestFor.length >= 2, `${item.name} should explain where it fits`);
     assert.ok(item.example.length >= 18, `${item.name} should include helper-only example copy`);
     assert.ok(item.guide.length >= 3, `${item.name} should include request-writing guidance`);
     assert.ok(item.validationHints.length >= 3, `${item.name} should include validation hints`);
+    assert.doesNotMatch(item.descriptionHtml, /\bTBD\b/);
+    assert.match(item.descriptionHtml, /Replace every example with the real request/);
   }
 });
 
-test("keeps the enforced readiness headings and fail-closed placeholders", () => {
+test("keeps the enforced readiness headings with visible example guidance", () => {
   const template = getDefaultLocalIntakeTemplate(PILO_PROJECT_ID);
   assert.ok(template);
 
   for (const heading of CODEX_REQUEST_REQUIRED_SECTION_LABELS) {
-    assert.ok(template.descriptionHtml.includes(`<h2>${heading}</h2><p>TBD</p>`));
+    assert.ok(template.descriptionHtml.includes(`<h2>${heading}</h2><blockquote><p>Example: `));
   }
 
-  assert.equal((template.descriptionHtml.match(/<p>TBD<\/p>/g) ?? []).length, 10);
+  assert.equal((template.descriptionHtml.match(/<blockquote><p>Example:/g) ?? []).length, 11);
   assert.ok(template.descriptionHtml.includes("<h2>Definition Of Ready:</h2>"));
+  assert.ok(template.descriptionHtml.includes("Every example above has been replaced with request-specific facts."));
   assert.equal(template.sourceUrl, PILO_FORK_SOURCE_URL);
 });
 
@@ -129,7 +134,7 @@ test("offers the tagged AGPL source on signed-out and authenticated surfaces", (
   );
   assert.match(signedOutSurface, /href=\{LEGAL_LINKS\.forkSource\}/);
   assert.match(authenticatedSurface, /href=\{PILO_FORK_SOURCE_URL\}/);
-  assert.match(PILO_FORK_SOURCE_URL, /PiloDevelopment\/plane\/tree\/v1\.2\.3-pilo\.2$/);
+  assert.match(PILO_FORK_SOURCE_URL, /PiloDevelopment\/plane\/tree\/v1\.2\.3-pilo\.3$/);
 });
 
 test("keys Intake draft state by project", () => {
