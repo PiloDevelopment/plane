@@ -1,11 +1,12 @@
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
+ * Modified by Pilo Development on 2026-07-20 to add project-scoped Intake templates.
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
 
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { observer } from "mobx-react";
 // plane imports
 import { ETabIndices } from "@plane/constants";
@@ -14,7 +15,7 @@ import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { TOAST_TYPE, setToast } from "@plane/propel/toast";
 import type { TIssue } from "@plane/types";
-import { ToggleSwitch } from "@plane/ui";
+import { AlertModalCore, ToggleSwitch } from "@plane/ui";
 import { renderFormattedPayloadDate, getTabIndex } from "@plane/utils";
 // hooks
 import { useProject } from "@/hooks/store/use-project";
@@ -26,6 +27,13 @@ import { usePlatformOS } from "@/hooks/use-platform-os";
 // plane web imports
 import { DeDupeButtonRoot } from "@/plane-web/components/de-dupe/de-dupe-button";
 import { DuplicateModalRoot } from "@/plane-web/components/de-dupe/duplicate-modal";
+import {
+  LocalIntakeTemplateSelector,
+  applyLocalIntakeTemplate,
+  getDefaultLocalIntakeTemplate,
+  getLocalIntakeTemplate,
+  isLocalIntakeTemplateDescriptionPristine,
+} from "@/plane-web/components/inbox/intake-templates";
 import { useDebouncedDuplicateIssues } from "@/plane-web/hooks/use-debounced-duplicate-issues";
 // services
 import { FileService } from "@/services/file.service";
@@ -58,11 +66,15 @@ export const defaultIssueData: Partial<TIssue> = {
 
 export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props: TInboxIssueCreateRoot) {
   const { workspaceSlug, projectId, handleModalClose, isDuplicateModalOpen, handleDuplicateIssueModal } = props;
+  const defaultTemplate = getDefaultLocalIntakeTemplate(projectId);
   // states
   const [uploadedAssetIds, setUploadedAssetIds] = useState<string[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(defaultTemplate?.id ?? null);
+  const [pendingTemplateSelection, setPendingTemplateSelection] = useState<{ templateId: string | null } | null>(null);
   // router
   const router = useAppRouter();
   // refs
+  const createMoreId = useId();
   const descriptionEditorRef = useRef<EditorRefApi>(null);
   const submitBtnRef = useRef<HTMLButtonElement | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -77,7 +89,9 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
   // states
   const [createMore, setCreateMore] = useState<boolean>(false);
   const [formSubmitting, setFormSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Partial<TIssue>>(defaultIssueData);
+  const [formData, setFormData] = useState<Partial<TIssue>>(() =>
+    applyLocalIntakeTemplate(defaultIssueData, defaultTemplate)
+  );
   const handleFormData = useCallback(
     <T extends keyof Partial<TIssue>>(issueKey: T, issueValue: Partial<TIssue>[T]) => {
       setFormData({
@@ -87,6 +101,42 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
     },
     [formData]
   );
+
+  const applyTemplateSelection = useCallback(
+    (templateId: string | null) => {
+      const template = getLocalIntakeTemplate(projectId, templateId);
+      const nextDescription = template?.descriptionHtml ?? "";
+
+      setSelectedTemplateId(template?.id ?? null);
+      setUploadedAssetIds([]);
+      setFormData((current) => applyLocalIntakeTemplate(current, template));
+      descriptionEditorRef.current?.setEditorValue(nextDescription || "<p></p>", false);
+    },
+    [projectId]
+  );
+
+  const handleTemplateSelection = (templateId: string | null) => {
+    if (templateId === selectedTemplateId) return;
+
+    const selectedTemplate = getLocalIntakeTemplate(projectId, selectedTemplateId);
+    if (isLocalIntakeTemplateDescriptionPristine(formData.description_html, selectedTemplate)) {
+      applyTemplateSelection(templateId);
+      return;
+    }
+
+    setPendingTemplateSelection({ templateId });
+  };
+
+  const resetDraft = useCallback(() => {
+    const template = getDefaultLocalIntakeTemplate(projectId);
+    const nextDraft = applyLocalIntakeTemplate(defaultIssueData, template);
+
+    setUploadedAssetIds([]);
+    setSelectedTemplateId(template?.id ?? null);
+    setPendingTemplateSelection(null);
+    setFormData(nextDraft);
+    descriptionEditorRef.current?.setEditorValue(nextDraft.description_html || "<p></p>", false);
+  }, [projectId]);
 
   // derived values
   const projectDetails = projectId ? getProjectById(projectId) : undefined;
@@ -159,36 +209,36 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
     };
     setFormSubmitting(true);
 
-    await createInboxIssue(workspaceSlug, projectId, payload)
-      .then(async (res) => {
-        if (uploadedAssetIds.length > 0) {
-          await fileService.updateBulkProjectAssetsUploadStatus(workspaceSlug, projectId, res?.issue.id ?? "", {
-            asset_ids: uploadedAssetIds,
-          });
-          setUploadedAssetIds([]);
-        }
-        if (!createMore) {
-          router.push(`/${workspaceSlug}/projects/${projectId}/intake/?currentTab=open&inboxIssueId=${res?.issue?.id}`);
-          handleModalClose();
-        } else {
-          descriptionEditorRef?.current?.clearEditor();
-          setFormData(defaultIssueData);
-        }
-        setToast({
-          type: TOAST_TYPE.SUCCESS,
-          title: `Success!`,
-          message: "Work item created successfully.",
+    try {
+      const res = await createInboxIssue(workspaceSlug, projectId, payload);
+
+      if (uploadedAssetIds.length > 0) {
+        await fileService.updateBulkProjectAssetsUploadStatus(workspaceSlug, projectId, res?.issue.id ?? "", {
+          asset_ids: uploadedAssetIds,
         });
-      })
-      .catch((error) => {
-        console.error(error);
-        setToast({
-          type: TOAST_TYPE.ERROR,
-          title: `Error!`,
-          message: "Some error occurred. Please try again.",
-        });
+        setUploadedAssetIds([]);
+      }
+      if (!createMore) {
+        router.push(`/${workspaceSlug}/projects/${projectId}/intake/?currentTab=open&inboxIssueId=${res?.issue?.id}`);
+        handleModalClose();
+      } else {
+        resetDraft();
+      }
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: `Success!`,
+        message: "Work item created successfully.",
       });
-    setFormSubmitting(false);
+    } catch (error) {
+      console.error(error);
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: `Error!`,
+        message: "Some error occurred. Please try again.",
+      });
+    } finally {
+      setFormSubmitting(false);
+    }
   };
 
   const isTitleLengthMoreThan255Character = formData?.name ? formData.name.length > 255 : false;
@@ -213,6 +263,12 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
               )}
             </div>
             <div className="space-y-3">
+              <LocalIntakeTemplateSelector
+                projectId={projectId}
+                selectedTemplateId={selectedTemplateId}
+                onSelect={handleTemplateSelection}
+                tabIndex={getIndex("template_id")}
+              />
               <InboxIssueTitle
                 data={formData}
                 handleData={handleFormData}
@@ -233,14 +289,18 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
             </div>
           </div>
           <div className="flex items-center justify-between gap-2 rounded-b-lg border-t-[0.5px] border-subtle bg-surface-1 px-5 py-4">
-            <div
-              className="inline-flex cursor-pointer items-center gap-1.5"
-              onClick={() => setCreateMore((prevData) => !prevData)}
-              role="button"
-              tabIndex={getIndex("create_more")}
-            >
-              <ToggleSwitch value={createMore} onChange={() => {}} size="sm" />
-              <span className="text-11">{t("create_more")}</span>
+            <div className="inline-flex items-center gap-1.5">
+              <ToggleSwitch
+                id={createMoreId}
+                value={createMore}
+                onChange={setCreateMore}
+                label={t("create_more")}
+                size="sm"
+                tabIndex={getIndex("create_more")}
+              />
+              <label htmlFor={createMoreId} className="cursor-pointer text-11">
+                {t("create_more")}
+              </label>
             </div>
             <div className="flex items-center gap-3">
               <Button
@@ -290,6 +350,25 @@ export const InboxIssueCreateRoot = observer(function InboxIssueCreateRoot(props
           />
         </div>
       )}
+      <AlertModalCore
+        isOpen={pendingTemplateSelection !== null}
+        handleClose={() => setPendingTemplateSelection(null)}
+        handleSubmit={() => {
+          if (!pendingTemplateSelection) return;
+          applyTemplateSelection(pendingTemplateSelection.templateId);
+          setPendingTemplateSelection(null);
+        }}
+        isSubmitting={false}
+        variant="primary"
+        title="Replace the current description?"
+        content={`Applying ${
+          getLocalIntakeTemplate(projectId, pendingTemplateSelection?.templateId ?? null)?.name ?? "a blank request"
+        } replaces only the description. Your title and work item properties stay unchanged.${
+          uploadedAssetIds.length > 0 ? " Files embedded in the replaced description will not be attached." : ""
+        }`}
+        primaryButtonText={{ loading: "Applying", default: "Apply template" }}
+        secondaryButtonText="Keep current draft"
+      />
     </div>
   );
 });

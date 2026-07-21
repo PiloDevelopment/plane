@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
+ * Modified by Pilo Development on 2026-07-20 to add Intake template keyboard order.
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
@@ -27,6 +28,7 @@ export const ISSUE_FORM_TAB_INDICES = [
 ];
 
 export const INTAKE_ISSUE_CREATE_FORM_TAB_INDICES = [
+  "template_id",
   "name",
   "description_html",
   "state_id",

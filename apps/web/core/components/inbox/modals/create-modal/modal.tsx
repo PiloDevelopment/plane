@@ -1,10 +1,10 @@
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
+ * Modified by Pilo Development on 2026-07-20 to isolate Intake draft state by project.
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
 
-import type { FC } from "react";
 import { useState } from "react";
 // plane imports
 import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
@@ -42,6 +42,7 @@ export function InboxIssueCreateModalRoot(props: TInboxIssueCreateModalRoot) {
       className="rounded-lg !bg-transparent shadow-none transition-[width] ease-linear"
     >
       <InboxIssueCreateRoot
+        key={projectId}
         workspaceSlug={workspaceSlug}
         projectId={projectId}
         handleModalClose={handleModalClose}

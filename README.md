@@ -1,5 +1,7 @@
 <br /><br />
 
+> **Pilo Community fork:** The `pilo-v1.2.3` release line adds a project-scoped Intake template extension to Plane Community `v1.2.3`. The complete modification, release, security, and rollback contract is documented in [PILO_FORK.md](./PILO_FORK.md). This fork remains licensed under AGPL-3.0-only.
+
 <p align="center">
 <a href="https://plane.so">
   <img src="https://media.docs.plane.so/logo/plane_github_readme.png" alt="Plane Logo" width="400">

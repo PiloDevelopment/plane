@@ -1,5 +1,6 @@
 /**
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
+ * Modified by Pilo Development on 2026-07-20 to support explicit keyboard order.
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
  */
@@ -15,16 +16,20 @@ interface IToggleSwitchProps {
   size?: "sm" | "md" | "lg";
   disabled?: boolean;
   className?: string;
+  id?: string;
+  tabIndex?: number;
 }
 
 function ToggleSwitch(props: IToggleSwitchProps) {
-  const { value, onChange, label, size = "sm", disabled, className } = props;
+  const { value, onChange, label, size = "sm", disabled, className, id, tabIndex } = props;
 
   return (
     <Switch
       checked={value}
       disabled={disabled}
+      id={id}
       onChange={onChange}
+      tabIndex={tabIndex}
       className={cn(
         "relative inline-flex h-6 w-10 flex-shrink-0 cursor-pointer rounded-full border border-subtle bg-layer-1 transition-colors duration-200 ease-in-out focus:outline-none",
         {
