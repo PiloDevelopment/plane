@@ -105,6 +105,8 @@ export const CODEX_REQUEST_REQUIRED_SECTIONS = [
 ] as const;
 
 export const CODEX_REQUEST_REQUIRED_SECTION_LABELS = CODEX_REQUEST_REQUIRED_SECTIONS.map((section) => section.label);
+type TCodexRequestSectionId = (typeof CODEX_REQUEST_REQUIRED_SECTIONS)[number]["id"];
+type TCodexRequestExampleMap = Readonly<Record<TCodexRequestSectionId, string>>;
 
 export type TLocalIntakeReadiness = Readonly<{
   completeCount: number;
@@ -114,20 +116,47 @@ export type TLocalIntakeReadiness = Readonly<{
   requiredCount: number;
 }>;
 
-const CODEX_REQUEST_DESCRIPTION_HTML = [
-  "<h1>Codex Request</h1>",
-  ...CODEX_REQUEST_REQUIRED_SECTIONS.flatMap((section) => [`<h2>${section.label}</h2>`, "<p>TBD</p>"]),
-  // The colon survives Plane's HTML stripping and preserves an unknown-heading boundary in the readiness parser.
-  "<h2>Definition Of Ready:</h2>",
-  "<ul>",
-  "<li><p>[ ] Goal is specific.</p></li>",
-  "<li><p>[ ] Acceptance criteria are testable.</p></li>",
-  "<li><p>[ ] Surface is identified.</p></li>",
-  "<li><p>[ ] Relevant links or files are included, or explicitly marked none.</p></li>",
-  "<li><p>[ ] Non-goals are stated.</p></li>",
-  "<li><p>[ ] Validation is stated or explicitly unknown.</p></li>",
-  "</ul>",
-].join("");
+const DEFAULT_SECTION_EXAMPLES: TCodexRequestExampleMap = {
+  acceptance_criteria:
+    "[ ] Crew filter composes with status and date filters. [ ] Empty results show a filtered empty state. [ ] Focused tests cover combined filters.",
+  constraints_non_goals:
+    "Do not redesign the job list layout. Do not change scheduling assignment semantics outside the filter contract.",
+  current_behavior_problem:
+    "On /service/jobs, dispatchers can filter by status and date but cannot narrow the list by assigned crew, so balancing workload requires manual scanning.",
+  data_safety_risk:
+    "Read-only list filtering. No canonical record writes, approvals, auth, billing, migrations, or external integrations.",
+  desired_behavior:
+    "The jobs list has a crew assignment filter that composes with existing filters and preserves the selected view state.",
+  goal: "Dispatchers can filter service jobs by assigned crew without losing status or date filters.",
+  relevant_context:
+    "Route: /service/jobs. Files likely include ServiceJobsPage and service jobs filter tests. Use None known only if no context exists.",
+  surface: "Tenant product - service jobs list",
+  validation_expected:
+    "Run the focused ServiceJobsPage test and the CRM typecheck/build target if typed API payloads change.",
+  work_type: "Feature",
+};
+
+function buildCodexRequestDescriptionHtml(sectionExamples: TCodexRequestExampleMap): string {
+  return [
+    "<h1>Codex Request</h1>",
+    "<blockquote><p>Example: Replace every example with the real request. The readiness gate ignores example text until each section contains request-specific facts.</p></blockquote>",
+    ...CODEX_REQUEST_REQUIRED_SECTIONS.flatMap((section) => [
+      `<h2>${section.label}</h2>`,
+      `<blockquote><p>Example: ${escapeHtmlText(sectionExamples[section.id])}</p></blockquote>`,
+    ]),
+    // The colon survives Plane's HTML stripping and preserves an unknown-heading boundary in the readiness parser.
+    "<h2>Definition Of Ready:</h2>",
+    "<ul>",
+    "<li><p>[ ] Every example above has been replaced with request-specific facts.</p></li>",
+    "<li><p>[ ] Goal is a concrete outcome, not a vague task.</p></li>",
+    "<li><p>[ ] Acceptance criteria are observable or testable.</p></li>",
+    "<li><p>[ ] Surface, route, provider, tenant, or system boundary is identified.</p></li>",
+    "<li><p>[ ] Relevant links/files are included or explicitly marked none.</p></li>",
+    "<li><p>[ ] Non-goals and risk posture are stated.</p></li>",
+    "<li><p>[ ] Validation path is stated or explicitly unknown.</p></li>",
+    "</ul>",
+  ].join("");
+}
 
 const EXPLICIT_UNKNOWN_PATTERN =
   /^(n\/a|none|none known|not applicable|not sure|unknown|no special risks?|no known risks?|no constraints?|no non-?goals?|no validation path|validation unknown)$/i;
@@ -140,15 +169,31 @@ const CODEX_READY_ALIAS_TO_SECTION_ID = new Map<string, string>(
   )
 );
 
-type TLocalIntakeTemplateInput = Omit<TLocalIntakeTemplate, "descriptionHtml" | "projectIds" | "sourceUrl">;
+type TLocalIntakeTemplateInput = Omit<TLocalIntakeTemplate, "descriptionHtml" | "projectIds" | "sourceUrl"> & {
+  sectionExamples?: Partial<TCodexRequestExampleMap>;
+};
 
 function buildLocalIntakeTemplate(input: TLocalIntakeTemplateInput): TLocalIntakeTemplate {
+  const { sectionExamples, ...template } = input;
+
   return {
-    ...input,
-    descriptionHtml: CODEX_REQUEST_DESCRIPTION_HTML,
+    ...template,
+    descriptionHtml: buildCodexRequestDescriptionHtml({
+      ...DEFAULT_SECTION_EXAMPLES,
+      ...sectionExamples,
+    }),
     projectIds: [PILO_PROJECT_ID],
     sourceUrl: PILO_FORK_SOURCE_URL,
   };
+}
+
+function escapeHtmlText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
@@ -176,6 +221,24 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     guide: ["Paste the exact error", "Give route and tenant context", "Name the last known good behavior"],
     isDefault: false,
     riskLevel: "Usually low to medium",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Authorized role can load the route without 403. [ ] Role without object scope still receives 403. [ ] Regression test covers tenant-scoped access.",
+      constraints_non_goals:
+        "Do not widen admin-only permissions. Do not bypass object-scope checks. Keep tenant isolation intact.",
+      current_behavior_problem:
+        "On /service/communications?tenant=tenant_general_contractor_complete_setup_e6cda02a, the workspace request returns 403 Forbidden: service communications object scope denied.",
+      data_safety_risk:
+        "RBAC and tenant-scoped communications data. Risk is accidental cross-tenant message access if the permission fix is too broad.",
+      desired_behavior:
+        "Users with the intended service communications role can review the tenant workspace; users without scope remain blocked with a clear access state.",
+      goal: "Authorized service operators can review tenant communications without false 403 denials.",
+      relevant_context:
+        "Route: /service/communications. API: /api/service/communications/workspace. Include tenant id, role, console error, and recent access changes.",
+      surface: "Tenant product - service communications",
+      validation_expected: "Run the focused RBAC/communications route tests and manually re-run the failing request.",
+      work_type: "Bug fix",
+    },
     surface: "Affected surface",
     validationHints: [
       "Add or update a regression test",
@@ -194,6 +257,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     guide: ["Describe the user job", "Name desktop and mobile states", "Specify empty, loading, and error behavior"],
     isDefault: false,
     riskLevel: "Usually low",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Save and Cancel render horizontally with usable spacing. [ ] AI generation fills subject and message for every selected channel. [ ] Insert fields menu shows valid fields or an empty state.",
+      constraints_non_goals:
+        "Preserve the existing notification drawer architecture and permissions. Do not change delivery semantics.",
+      current_behavior_problem:
+        "In the notifications edit drawer, Save and Cancel stack vertically and Insert fields opens without visible fields.",
+      data_safety_risk:
+        "Draft copy only. AI output must stay editable and must not directly publish or alter canonical notification state without save.",
+      desired_behavior:
+        "The drawer feels deliberate: actions are horizontally aligned, generation applies to subject and message, and field insertion is discoverable.",
+      goal: "Notification editors can quickly draft and save channel copy without layout friction.",
+      relevant_context:
+        "Route: Admin notifications edit drawer. Include screenshot, notification type, selected channels, and any console/API errors.",
+      surface: "Admin UI - notifications edit drawer",
+      validation_expected:
+        "Run focused drawer/component tests, check keyboard focus, and verify desktop plus 375px mobile layout.",
+      work_type: "UI/UX",
+    },
     surface: "Tenant, CRM, or Admin UI",
     validationHints: [
       "Focused component/page tests",
@@ -212,6 +294,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     guide: ["State production impact", "Include the failing endpoint or route", "Name rollback and smoke checks"],
     isDefault: false,
     riskLevel: "High until proven otherwise",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Failing endpoint returns 200 or a typed recoverable error. [ ] Logs no longer show the original exception. [ ] Smoke checks cover the affected page after deploy.",
+      constraints_non_goals:
+        "Prefer the smallest safe recovery. Do not run destructive production commands. Do not mask unknown root cause with a generic success state.",
+      current_behavior_problem:
+        "Production users hit an Internal server error in Admin integrations, blocking support from reviewing integration health.",
+      data_safety_risk:
+        "Production runtime incident. Treat as high risk until logs prove data writes, auth, billing, and integrations are unaffected.",
+      desired_behavior:
+        "The affected workspace loads reliably or presents a typed recovery state with enough operator context to proceed.",
+      goal: "Restore the production operator path and prevent the same incident from recurring.",
+      relevant_context:
+        "Include production route, timestamp with timezone, request id if available, status code, logs, and last deployed SHA.",
+      surface: "Production runtime - affected route/API",
+      validation_expected:
+        "Reproduce safely, add regression coverage, run focused tests, deploy with rollback notes, and smoke the route.",
+      work_type: "Incident fix",
+    },
     surface: "Production runtime",
     validationHints: [
       "Reproduce with safe read-only commands",
@@ -234,6 +335,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     ],
     isDefault: false,
     riskLevel: "Medium to high",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Pilo system notifications use Pilo-owned sender credentials. [ ] Tenant customer notifications use the tenant provider connection. [ ] Provider tests cover OAuth callback, sender selection, and failure states.",
+      constraints_non_goals:
+        "Do not expose provider client secrets in the UI. Do not route tenant customer messages through Pilo system credentials.",
+      current_behavior_problem:
+        "System SMS/email/DM sender selection is unclear, and tenant OAuth provider settings can be confused with Pilo-owned system messaging.",
+      data_safety_risk:
+        "External-provider credentials, OAuth tokens, customer communications, and audit logs. Risk is wrong sender, leaked secrets, or unauthorized delivery.",
+      desired_behavior:
+        "Admin can connect Pilo-owned Gmail, RingCentral, and Facebook providers and select the exact sender used for Pilo system messages.",
+      goal: "Pilo-owned system messages and tenant-owned customer messages use separate, auditable provider routing.",
+      relevant_context:
+        "Providers: Gmail, RingCentral, Facebook. Include callback URLs, sender/page ids, tenant-vs-system boundary, and test recipient behavior.",
+      surface: "Admin integrations - system messaging providers",
+      validation_expected:
+        "Run provider route tests, callback/redirect validation, sender-selection tests, and verify no secrets reach client bundles or logs.",
+      work_type: "Feature / Bug fix",
+    },
     surface: "Integrations",
     validationHints: [
       "Provider route tests",
@@ -252,6 +372,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     guide: ["Describe affected rows", "State idempotency rules", "Include rollback or verification SQL"],
     isDefault: false,
     riskLevel: "High",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Dry-run reports affected row counts. [ ] Backfill is idempotent and resumable. [ ] Production verification query proves repaired records can schedule.",
+      constraints_non_goals:
+        "Do not overwrite manually corrected rows. Do not run production writes without explicit dry-run evidence and rollback posture.",
+      current_behavior_problem:
+        "Some jobs cannot be scheduled because service-area lineage is missing or unresolved for assignable scheduling records.",
+      data_safety_risk:
+        "Production data repair touching canonical job/scheduling records. Requires idempotency, audit trail, verification counts, and rollback plan.",
+      desired_behavior:
+        "Affected jobs have valid service-area lineage and scheduling resolves through the normal service-native flow.",
+      goal: "Repair service-area lineage so eligible jobs can be assigned or scheduled safely.",
+      relevant_context:
+        "Include affected tenant/job ids, current error text, expected lineage source, dry-run query, and prior migration/backfill references.",
+      surface: "Backend/runtime - scheduling data",
+      validation_expected:
+        "Run migration/backfill tests, dry-run count query, production verification query, and a schedule smoke check for repaired records.",
+      work_type: "Migration / Backfill",
+    },
     surface: "Backend/runtime",
     validationHints: ["Migration parity test", "Dry-run or count query", "Production backfill verification query"],
     workType: "Backend/runtime",
@@ -266,6 +405,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     guide: ["Name the contract boundary", "Identify canonical writes", "Call out tenant scoping"],
     isDefault: false,
     riskLevel: "Medium",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Count API is tenant-scoped. [ ] Browser tab title reflects the active tenant only. [ ] Tests cover no-tenant, tenant A, and tenant B isolation.",
+      constraints_non_goals:
+        "Do not introduce global notification counts into tenant surfaces. Do not rely on UI-only filtering for isolation.",
+      current_behavior_problem:
+        "The browser tab can show a notification count that does not match the active tenant surface, creating invisible or cross-tenant noise.",
+      data_safety_risk:
+        "Tenant-scoped unread state. Risk is cross-tenant metadata leakage or inconsistent notification state across surfaces.",
+      desired_behavior:
+        "Unread/count APIs and frontend badges derive from the active tenant context and reset correctly when switching tenants.",
+      goal: "Notification counts are scoped to the active tenant across API, state, and browser title.",
+      relevant_context:
+        "Route: /service/settings/workflows?tenant=tenant_client_a_ca09a79d. Include current count, active tenant id, and relevant API payloads.",
+      surface: "Backend/API plus tenant frontend adapter",
+      validation_expected:
+        "Run route/service tests for tenant scoping, frontend adapter tests, and a manual tenant-switch smoke check.",
+      work_type: "Feature / Refactor",
+    },
     surface: "Backend/runtime",
     validationHints: ["Route or service tests", "Contract/schema checks", "Frontend adapter tests if payloads change"],
     workType: "Feature / Refactor",
@@ -285,6 +443,25 @@ const LOCAL_INTAKE_TEMPLATES: readonly TLocalIntakeTemplate[] = [
     ],
     isDefault: false,
     riskLevel: "Low unless production access is needed",
+    sectionExamples: {
+      acceptance_criteria:
+        "[ ] Evidence shows whether the issue is bundle, project scope, cache, permissions, or modal state. [ ] No code change is made unless root cause is proven. [ ] Follow-up implementation item is created if needed.",
+      constraints_non_goals:
+        "Do not change production state during diagnosis. Do not guess from UI symptoms without checking source and deployed assets.",
+      current_behavior_problem:
+        "The Plane intake template is expected for the Pilo project, but the Add work item modal appears without the custom template experience.",
+      data_safety_risk:
+        "Read-only investigation unless production deploy or authenticated browser inspection is explicitly needed.",
+      desired_behavior:
+        "The investigation identifies the exact layer responsible and recommends the smallest corrective action.",
+      goal: "Determine why the intake template is not visible for the expected project and whether code, deploy, or cache is responsible.",
+      relevant_context:
+        "Route: /pilo/projects/e9b270a8-719f-4e2f-80bb-e9724f906e16/intake. Include browser state, user role, deployed asset hash, and project id.",
+      surface: "Plane intake - authenticated project modal",
+      validation_expected:
+        "Collect command outputs, source references, deployed asset markers, and browser observations; stop with a no-change conclusion if code is correct.",
+      work_type: "Investigation",
+    },
     surface: "Any Pilo surface",
     validationHints: [
       "Commands and observations",
